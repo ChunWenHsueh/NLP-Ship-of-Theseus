@@ -1,42 +1,81 @@
+
 import matplotlib.pyplot as plt
 import pandas as pd
 
-# read file
-df = pd.read_csv("similarity_scores.csv")
+# read similarity scores
+df = pd.read_csv("similarity_scores_full.csv")
 
-# calculate mean across all four paraphrasers
-agg = df.groupby(["dataset", "round"])[["bleu", "rouge_l", "bertscore_f1"]].mean()
+PARAPHRASERS = ["chatgpt", "palm", "dipper", "pegasus(full)"]
+METRICS = ["bleu", "rouge_l", "bertscore_f1"]
+DATASETS = ["xsum", "yelp"]
 
-# create a subplot for dataset
-datasets = df["dataset"].unique()
-fig, axes = plt.subplots(1, len(datasets), figsize=(12, 5), sharey=True)
+# select the four paraphrasers and T1-T3.
+df = df[
+    df["paraphraser"].isin(PARAPHRASERS)
+    & df["round"].isin([1, 2, 3])
+]
 
-for ax, dataset in zip(axes, datasets):
-    sub = agg.loc[dataset]
+# calculate mean similarity for each dataset, paraphraser, and round
+agg = (
+    df.groupby(["dataset", "paraphraser", "round"])[METRICS]
+    .mean()
+    .reset_index()
+)
 
-    # add T0 baseline
-    rounds = [0] + sub.index.tolist()
-    bleu_vals = [1.0] + sub["bleu"].tolist()
-    rouge_vals = [1.0] + sub["rouge_l"].tolist()
-    bert_vals = [1.0] + sub["bertscore_f1"].tolist()
+# create a figure: datasets as rows and metrics as columns
+fig, axes = plt.subplots(2, 3, figsize=(15, 9))
 
-    ax.plot(rounds, bleu_vals, marker="o", label="BLEU (lexical / plank)", color="#d62728")
-    ax.plot(rounds, rouge_vals, marker="s", label="ROUGE-L (lexical / plank)", color="#ff7f0e")
-    ax.plot(rounds, bert_vals, marker="^", label="BERTScore (semantic / hull)", color="#1f77b4", linewidth=2.5)
+METRIC_LABELS = {
+    "bleu": "BLEU (Lexical)",
+    "rouge_l": "ROUGE-L (Lexical)",
+    "bertscore_f1": "BERTScore F1 (Semantic)",
+}
 
-    # subplot titles, axes, and grid.
-    ax.set_title(f"{dataset.upper()}")
-    ax.set_xlabel("Paraphrase round")
-    ax.set_xticks(rounds)
-    ax.set_xticklabels([f"T{r}" for r in rounds])
-    ax.set_ylim(0, 1.05)
-    ax.grid(alpha=0.3)
+# plot similarity decay for each dataset and metric
+for i, dataset in enumerate(DATASETS):
+    for j, metric in enumerate(METRICS):
+        ax = axes[i, j]
 
-# add the shared y-axis label
-axes[0].set_ylabel("Similarity to T0")
-axes[0].legend(loc="lower left", fontsize=9)
+        # plot one line for each paraphraser
+        for paraphraser in PARAPHRASERS:
+            sub = agg[
+                (agg["dataset"] == dataset)
+                & (agg["paraphraser"] == paraphraser)
+            ].sort_values("round")
 
-fig.suptitle("style vs content_decay", fontsize=11)
-fig.tight_layout(rect=[0, 0, 1, 0.92])
+            ax.plot(
+                sub["round"],
+                sub[metric],
+                marker="o",
+                label=paraphraser,
+            )
+
+        # configure subplot titles, axes, and grid
+        ax.set_title(f"{dataset.upper()} - {METRIC_LABELS[metric]}")
+        ax.set_xlabel("Paraphrase round")
+        ax.set_ylabel("Similarity to T0")
+        ax.set_xticks([1, 2, 3])
+        ax.set_xticklabels(["T1", "T2", "T3"])
+        ax.set_ylim(0, 1.05)
+        ax.grid(alpha=0.3)
+
+# add a shared legend and figure title
+handles, labels = axes[0, 0].get_legend_handles_labels()
+
+fig.legend(
+    handles,
+    labels,
+    loc="lower center",
+    ncol=4,
+    bbox_to_anchor=(0.5, 0.02),
+)
+
+fig.suptitle(
+    "Lexical vs. Semantic Similarity Across Paraphrasing Rounds",
+    fontsize=14,
+)
+
+fig.tight_layout(rect=[0, 0.07, 1, 0.95])
 fig.savefig("style_vs_content_decay.png", dpi=150)
+
 print("Picture saved")

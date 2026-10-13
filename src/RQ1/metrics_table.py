@@ -9,7 +9,7 @@ def parse_args():
 
     script_dir = Path(__file__).resolve().parent
 
-    parser.add_argument("--input", type=Path, default=script_dir / "similarity_scores.csv")
+    parser.add_argument("--input", type=Path, default=script_dir / "similarity_scores_full.csv")
     parser.add_argument("--out", type=Path, default=script_dir / "metrics_table.csv")
 
     return parser.parse_args()
@@ -45,7 +45,7 @@ def main():
     for dataset in summary["dataset"].unique():
         sub = summary[summary["dataset"] == dataset]
 
-        # Add T0 as the original reference baseline.
+        # add T0 as the original reference baseline
         baseline = pd.DataFrame([{
             "dataset": dataset,
             "paraphraser": "Original",
@@ -62,7 +62,7 @@ def main():
         print(f"Dataset: {dataset}")
         print(table.to_string(index=False))
 
-    # save comparison tables to CSV.
+    # save comparison tables to CSV
     args.out.parent.mkdir(parents=True, exist_ok=True)
     pd.concat(tables, ignore_index=True).to_csv(args.out, index=False)
     print()

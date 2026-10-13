@@ -1,6 +1,7 @@
 import argparse
-
+from pathlib import Path
 import pandas as pd
+import torch
 from nltk.translate.bleu_score import sentence_bleu, SmoothingFunction
 from rouge_score import rouge_scorer
 from bert_score import score as bertscore
@@ -17,25 +18,18 @@ def compute_bleu(reference, candidate):
 def compute_rouge_l(scorer, reference, candidate):
     return scorer.score(reference, candidate)["rougeL"].fmeasure
 
-# randomly sample up to n pairs for each dataset, paraphraser, and round
-def sample_per_cell(df, n: int, seed: int = 42):
-    return (
-        df.groupby(["dataset", "paraphraser", "round"], group_keys=False)
-        .apply(lambda g: g.sample(min(n, len(g)), random_state=seed))
-        .reset_index(drop=True)
-    )
-
 def main():
     parser = argparse.ArgumentParser(description="Compute similarity metrics for T0 vs T1/T2/T3 pairs")
     parser.add_argument("--pairs-file", default="paired_table.csv")
-    parser.add_argument("--sample-per-cell", type=int, default=200)
     parser.add_argument("--bert-model", default="roberta-large")
-    parser.add_argument("--out", default="similarity_scores.csv")
+    parser.add_argument("--batch-size", type=int, default=16)
+    parser.add_argument("--out",type=Path, default=Path("results/similarity_scores_full.csv"))
     args = parser.parse_args()
 
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    
     pairs = pd.read_csv(args.pairs_file)
-    pairs = sample_per_cell(pairs, args.sample_per_cell)
-    print(f"Scoring {len(pairs)} sampled pairs...")
+    print(f"Scoring {len(pairs)} pairs")
 
     # ompute lexical similarity using BLEU and ROUGE
     rouge_scorer_obj = rouge_scorer.RougeScorer(["rougeL"], use_stemmer=True)
@@ -52,10 +46,16 @@ def main():
         refs=pairs["original_text"].tolist(),
         lang="en",
         model_type=args.bert_model,
+        device=device,
+        batch_size=args.batch_size,
         verbose=True,
     )
     pairs["bertscore_f1"] = F1.tolist()
+    print("BERTScore completed")
+
+    args.out.parent.mkdir(parents=True, exist_ok=True)
     pairs.to_csv(args.out, index=False)
+    print(f"Similarity scores saved")
 
 if __name__ == "__main__":
     main()
