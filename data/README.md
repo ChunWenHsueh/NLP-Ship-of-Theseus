@@ -52,6 +52,16 @@ seven paraphraser configurations. `t0` is the `original` text, and `t1`–`t3` a
 successive rewrites by the named paraphraser. Missing versions are empty cells,
 including a missing `original`.
 
+The same run also creates
+`data/organized_paraphrased_datasets/merged_paraphrased_wide.csv`, with columns
+`dataset,source,key,paraphraser,t0,t1,t2,t3`. This file contains every row from the
+per-dataset outputs. The `dataset` value comes from the input filename, such as
+`cmv` for `cmv_paraphrased.csv`. The script preserves rows even when different
+datasets share the same `source` and `key`.
+
+Use `--input-dir` and `--output-dir` to change the input and output directories.
+The merged file includes only datasets processed in the current run.
+
 ## 3. CSV columns
 
 Each of the seven datasets has a training file and an evaluation file:

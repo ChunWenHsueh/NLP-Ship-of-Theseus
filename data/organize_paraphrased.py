@@ -1,4 +1,4 @@
-"""Turn each paraphrasing chain into one CSV row with T0 through T3."""
+"""Export T0 through T3 chains as per-dataset and merged CSV files."""
 
 import argparse
 import csv
@@ -22,6 +22,7 @@ VERSION_TO_CHAIN = {
     for iteration in (1, 2, 3)
 }
 OUTPUT_COLUMNS = ("source", "key", "paraphraser", "t0", "t1", "t2", "t3")
+MERGED_COLUMNS = ("dataset", *OUTPUT_COLUMNS)
 INPUT_COLUMNS = {"source", "key", "text", "version_name"}
 
 
@@ -108,6 +109,36 @@ def organize_file(input_path: Path, output_path: Path) -> tuple[int, int]:
     return len(records) * len(PARAPHRASERS), missing_originals
 
 
+def merge_files(dataset_paths: list[tuple[str, Path]], output_path: Path) -> int:
+    """Concatenate this run's organized CSV files and label each dataset."""
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    temporary_path = None
+    row_count = 0
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            newline="",
+            dir=output_path.parent,
+            prefix=f".{output_path.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as output_file:
+            temporary_path = Path(output_file.name)
+            writer = csv.DictWriter(output_file, fieldnames=MERGED_COLUMNS)
+            writer.writeheader()
+            for dataset, input_path in dataset_paths:
+                with input_path.open("r", encoding="utf-8", newline="") as source_file:
+                    for row in csv.DictReader(source_file):
+                        writer.writerow({"dataset": dataset, **row})
+                        row_count += 1
+        os.replace(temporary_path, output_path)
+    finally:
+        if temporary_path is not None:
+            temporary_path.unlink(missing_ok=True)
+    return row_count
+
+
 def main() -> None:
     base = Path(__file__).resolve().parent
     parser = argparse.ArgumentParser(description=__doc__)
@@ -121,7 +152,7 @@ def main() -> None:
         "--output-dir",
         type=Path,
         default=base / "organized_paraphrased_datasets",
-        help="Directory for the seven organized CSV files",
+        help="Directory for per-dataset CSV files and merged_paraphrased_wide.csv",
     )
     args = parser.parse_args()
 
@@ -134,13 +165,20 @@ def main() -> None:
             "see data/README.md for download instructions"
         )
 
+    dataset_paths = []
     for input_path in input_paths:
         output_path = args.output_dir / f"{input_path.stem}_wide.csv"
         row_count, missing_originals = organize_file(input_path, output_path)
+        dataset = input_path.stem.removesuffix("_paraphrased")
+        dataset_paths.append((dataset, output_path))
         print(
             f"{input_path.name} -> {output_path} ({row_count} rows; "
             f"{missing_originals} source/key groups missing T0)"
         )
+
+    merged_path = args.output_dir / "merged_paraphrased_wide.csv"
+    merged_count = merge_files(dataset_paths, merged_path)
+    print(f"Merged {len(dataset_paths)} datasets -> {merged_path} ({merged_count} rows)")
 
 
 if __name__ == "__main__":
