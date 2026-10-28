@@ -1,8 +1,4 @@
 #!/usr/bin/env python3
-# /// script
-# requires-python = ">=3.11,<3.13"
-# dependencies = ["pandas>=2.2,<4", "bert-score==0.3.13", "transformers==4.44.2", "torch==2.4.1", "numpy<2"]
-# ///
 """Add t0_bert through t3_bert to the merged CSV. Scores are F1 against T0.
 
 python run_rq1_bertscore.py --device cuda
